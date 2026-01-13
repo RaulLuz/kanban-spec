@@ -1,42 +1,35 @@
-import { db } from '../db';
-import { boards, columns } from '../db/schema';
+import { getStorageData, saveStorageData, initializeStorage } from '../storage/localStorage';
 import { generateId } from '../utils/uuid';
 import { validateBoardName } from '../utils/validation';
 import { NotFoundError, BusinessRuleError, StorageError } from '../utils/errors';
 import { DEFAULT_COLUMN_NAMES, DEFAULT_COLUMN_COLOR } from '../utils/constants';
-import { eq } from 'drizzle-orm';
 import type { Board } from '@/types';
 
 /**
- * Service for managing Kanban boards
- * 
- * @class BoardService
- * @description Handles all board-related operations including creation, retrieval, updates, and deletion.
- * Enforces business rules such as preventing deletion of the last board.
+ * Service for managing Kanban boards using localStorage
  */
 export class BoardService {
   /**
    * Create a new board with default columns (Todo, Doing, Done)
-   * 
-   * @param {string} name - Board name (1-100 characters)
-   * @returns {Promise<Board>} The created board
-   * @throws {ValidationError} If board name is invalid
-   * @throws {StorageError} If database operation fails
    */
   static async createBoard(name: string): Promise<Board> {
     try {
       validateBoardName(name);
+      initializeStorage();
 
+      const data = getStorageData();
       const boardId = generateId();
-      const now = new Date();
+      const now = new Date().toISOString();
 
       // Create board
-      await db.insert(boards).values({
+      const newBoard = {
         id: boardId,
         name: name.trim(),
         createdAt: now,
         updatedAt: now,
-      });
+      };
+
+      data.boards.push(newBoard);
 
       // Create default columns
       const columnValues = DEFAULT_COLUMN_NAMES.map((columnName, index) => ({
@@ -49,43 +42,37 @@ export class BoardService {
         updatedAt: now,
       }));
 
-      await db.insert(columns).values(columnValues);
+      data.columns.push(...columnValues);
+      saveStorageData(data);
 
-      const board = await this.getBoard(boardId);
-      if (!board) {
-        throw new StorageError('Failed to retrieve created board');
-      }
-
-      return board;
+      return {
+        id: newBoard.id,
+        name: newBoard.name,
+        createdAt: new Date(newBoard.createdAt),
+        updatedAt: new Date(newBoard.updatedAt),
+      };
     } catch (error) {
-      if (error instanceof StorageError || error instanceof Error) {
-        throw error;
-      }
       throw new StorageError('Failed to create board', error as Error);
     }
   }
 
   /**
    * Get a board by ID
-   * 
-   * @param {string} id - Board ID
-   * @returns {Promise<Board | null>} The board if found, null otherwise
-   * @throws {StorageError} If database operation fails
    */
   static async getBoard(id: string): Promise<Board | null> {
     try {
-      const result = await db.select().from(boards).where(eq(boards.id, id)).limit(1);
+      const data = getStorageData();
+      const board = data.boards.find((b) => b.id === id);
       
-      if (result.length === 0) {
+      if (!board) {
         return null;
       }
 
-      const boardData = result[0];
       return {
-        id: boardData.id,
-        name: boardData.name,
-        createdAt: boardData.createdAt,
-        updatedAt: boardData.updatedAt,
+        id: board.id,
+        name: board.name,
+        createdAt: new Date(board.createdAt),
+        updatedAt: new Date(board.updatedAt),
       };
     } catch (error) {
       throw new StorageError('Failed to retrieve board', error as Error);
@@ -94,20 +81,20 @@ export class BoardService {
 
   /**
    * Get all boards ordered by creation date
-   * 
-   * @returns {Promise<Board[]>} Array of all boards
-   * @throws {StorageError} If database operation fails
    */
   static async getAllBoards(): Promise<Board[]> {
     try {
-      const results = await db.select().from(boards).orderBy(boards.createdAt);
+      initializeStorage();
+      const data = getStorageData();
       
-      return results.map((board) => ({
-        id: board.id,
-        name: board.name,
-        createdAt: board.createdAt,
-        updatedAt: board.updatedAt,
-      }));
+      return data.boards
+        .map((board) => ({
+          id: board.id,
+          name: board.name,
+          createdAt: new Date(board.createdAt),
+          updatedAt: new Date(board.updatedAt),
+        }))
+        .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
     } catch (error) {
       throw new StorageError('Failed to retrieve boards', error as Error);
     }
@@ -115,43 +102,33 @@ export class BoardService {
 
   /**
    * Update board properties
-   * 
-   * @param {string} id - Board ID
-   * @param {Partial<Pick<Board, 'name'>>} updates - Board properties to update
-   * @returns {Promise<Board>} The updated board
-   * @throws {NotFoundError} If board doesn't exist
-   * @throws {ValidationError} If updates are invalid
-   * @throws {StorageError} If database operation fails
    */
   static async updateBoard(id: string, updates: Partial<Pick<Board, 'name'>>): Promise<Board> {
     try {
-      const board = await this.getBoard(id);
-      if (!board) {
+      const data = getStorageData();
+      const boardIndex = data.boards.findIndex((b) => b.id === id);
+      
+      if (boardIndex === -1) {
         throw new NotFoundError('Board', id);
       }
 
       if (updates.name !== undefined) {
         validateBoardName(updates.name);
+        data.boards[boardIndex].name = updates.name.trim();
       }
 
-      const updateData: Partial<typeof boards.$inferInsert> = {
-        updatedAt: new Date(),
+      data.boards[boardIndex].updatedAt = new Date().toISOString();
+      saveStorageData(data);
+
+      const updated = data.boards[boardIndex];
+      return {
+        id: updated.id,
+        name: updated.name,
+        createdAt: new Date(updated.createdAt),
+        updatedAt: new Date(updated.updatedAt),
       };
-
-      if (updates.name !== undefined) {
-        updateData.name = updates.name.trim();
-      }
-
-      await db.update(boards).set(updateData).where(eq(boards.id, id));
-
-      const updatedBoard = await this.getBoard(id);
-      if (!updatedBoard) {
-        throw new StorageError('Failed to retrieve updated board');
-      }
-
-      return updatedBoard;
     } catch (error) {
-      if (error instanceof NotFoundError || error instanceof StorageError) {
+      if (error instanceof NotFoundError) {
         throw error;
       }
       throw new StorageError('Failed to update board', error as Error);
@@ -159,30 +136,32 @@ export class BoardService {
   }
 
   /**
-   * Delete a board and all associated data (cascade)
-   * 
-   * @param {string} id - Board ID
-   * @returns {Promise<void>}
-   * @throws {NotFoundError} If board doesn't exist
-   * @throws {BusinessRuleError} If attempting to delete the last board
-   * @throws {StorageError} If database operation fails
+   * Delete a board and all associated data
    */
   static async deleteBoard(id: string): Promise<void> {
     try {
-      // Check if board exists
-      const board = await this.getBoard(id);
-      if (!board) {
+      const data = getStorageData();
+      const boardIndex = data.boards.findIndex((b) => b.id === id);
+      
+      if (boardIndex === -1) {
         throw new NotFoundError('Board', id);
       }
 
       // Check if this is the last board
-      const allBoards = await this.getAllBoards();
-      if (allBoards.length === 1) {
+      if (data.boards.length === 1) {
         throw new BusinessRuleError('Cannot delete the last remaining board');
       }
 
-      // Delete board (cascade will delete columns and tasks)
-      await db.delete(boards).where(eq(boards.id, id));
+      // Delete board and associated columns, tasks, and subtasks
+      data.boards.splice(boardIndex, 1);
+      data.columns = data.columns.filter((c) => c.boardId !== id);
+      data.tasks = data.tasks.filter((t) => t.boardId !== id);
+      data.subtasks = data.subtasks.filter((st) => {
+        const task = data.tasks.find((t) => t.id === st.taskId);
+        return task && task.boardId !== id;
+      });
+
+      saveStorageData(data);
     } catch (error) {
       if (error instanceof NotFoundError || error instanceof BusinessRuleError) {
         throw error;

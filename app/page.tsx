@@ -24,7 +24,6 @@ export default function Home() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showEditColumnModal, setShowEditColumnModal] = useState(false);
-  const [targetColumnId, setTargetColumnId] = useState<string>('');
 
   const loading = boardsLoading || columnsLoading || tasksLoading;
 
@@ -52,8 +51,7 @@ export default function Home() {
     setSelectedTask(task);
   };
 
-  const handleAddTask = (columnId: string) => {
-    setTargetColumnId(columnId);
+  const handleAddTask = () => {
     setShowAddModal(true);
   };
 
@@ -116,11 +114,8 @@ export default function Home() {
           isOpen={showAddModal}
           onClose={() => {
             setShowAddModal(false);
-            setTargetColumnId('');
           }}
-          columnId={targetColumnId || columns[0]?.id || ''}
           boardId={currentBoard.id}
-          columns={columns}
           onTaskCreated={handleTaskUpdated}
         />
       )}

@@ -1,97 +1,90 @@
-import { db } from '../db';
-import { subtasks, tasks } from '../db/schema';
-import { generateId } from '../utils/uuid';
+import { getStorageData, saveStorageData, generateId } from '../storage/localStorage';
 import { validateSubtaskTitle } from '../utils/validation';
 import { NotFoundError, StorageError } from '../utils/errors';
-import { eq } from 'drizzle-orm';
 import type { Subtask } from '@/types';
 
 export class SubtaskService {
-  /**
-   * Create a new subtask for a task
-   */
   static async createSubtask(taskId: string, title: string): Promise<Subtask> {
     try {
       validateSubtaskTitle(title);
 
+      const data = getStorageData();
+
       // Verify task exists
-      const task = await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1);
-      if (task.length === 0) {
+      const task = data.tasks.find((t) => t.id === taskId);
+      if (!task) {
         throw new NotFoundError('Task', taskId);
       }
 
       // Get current max position
-      const existingSubtasks = await db
-        .select()
-        .from(subtasks)
-        .where(eq(subtasks.taskId, taskId))
-        .orderBy(subtasks.position);
+      const existingSubtasks = data.subtasks
+        .filter((st) => st.taskId === taskId)
+        .sort((a, b) => a.position - b.position);
 
       const position = existingSubtasks.length;
 
       const subtaskId = generateId();
       const now = new Date();
 
-      await db.insert(subtasks).values({
+      const newSubtask = {
         id: subtaskId,
         taskId,
         title: title.trim(),
         isCompleted: false,
         position,
-        createdAt: now,
-        updatedAt: now,
-      });
+        createdAt: now.toISOString(),
+        updatedAt: now.toISOString(),
+      };
 
-      const subtask = await this.getSubtask(subtaskId);
-      if (!subtask) {
-        throw new StorageError('Failed to retrieve created subtask');
-      }
+      data.subtasks.push(newSubtask);
+      saveStorageData(data);
 
-      return subtask;
+      return {
+        id: newSubtask.id,
+        taskId: newSubtask.taskId,
+        title: newSubtask.title,
+        isCompleted: newSubtask.isCompleted,
+        position: newSubtask.position,
+        createdAt: new Date(newSubtask.createdAt),
+        updatedAt: new Date(newSubtask.updatedAt),
+      };
     } catch (error) {
-      if (error instanceof NotFoundError || error instanceof StorageError) {
+      if (error instanceof NotFoundError) {
         throw error;
       }
       throw new StorageError('Failed to create subtask', error as Error);
     }
   }
 
-  /**
-   * Get a subtask by ID
-   */
   static async getSubtask(id: string): Promise<Subtask | null> {
     try {
-      const result = await db.select().from(subtasks).where(eq(subtasks.id, id)).limit(1);
+      const data = getStorageData();
+      const subtask = data.subtasks.find((st) => st.id === id);
 
-      if (result.length === 0) {
+      if (!subtask) {
         return null;
       }
 
-      const subtaskData = result[0];
       return {
-        id: subtaskData.id,
-        taskId: subtaskData.taskId,
-        title: subtaskData.title,
-        isCompleted: subtaskData.isCompleted,
-        position: subtaskData.position,
-        createdAt: subtaskData.createdAt,
-        updatedAt: subtaskData.updatedAt,
+        id: subtask.id,
+        taskId: subtask.taskId,
+        title: subtask.title,
+        isCompleted: subtask.isCompleted,
+        position: subtask.position,
+        createdAt: new Date(subtask.createdAt),
+        updatedAt: new Date(subtask.updatedAt),
       };
     } catch (error) {
       throw new StorageError('Failed to retrieve subtask', error as Error);
     }
   }
 
-  /**
-   * Get all subtasks for a task
-   */
   static async getSubtasksByTask(taskId: string): Promise<Subtask[]> {
     try {
-      const results = await db
-        .select()
-        .from(subtasks)
-        .where(eq(subtasks.taskId, taskId))
-        .orderBy(subtasks.position);
+      const data = getStorageData();
+      const results = data.subtasks
+        .filter((st) => st.taskId === taskId)
+        .sort((a, b) => a.position - b.position);
 
       return results.map((subtask) => ({
         id: subtask.id,
@@ -99,69 +92,66 @@ export class SubtaskService {
         title: subtask.title,
         isCompleted: subtask.isCompleted,
         position: subtask.position,
-        createdAt: subtask.createdAt,
-        updatedAt: subtask.updatedAt,
+        createdAt: new Date(subtask.createdAt),
+        updatedAt: new Date(subtask.updatedAt),
       }));
     } catch (error) {
       throw new StorageError('Failed to retrieve subtasks', error as Error);
     }
   }
 
-  /**
-   * Update subtask properties
-   */
   static async updateSubtask(
     id: string,
     updates: Partial<Pick<Subtask, 'title' | 'isCompleted'>>
   ): Promise<Subtask> {
     try {
-      const subtask = await this.getSubtask(id);
-      if (!subtask) {
+      const data = getStorageData();
+      const subtaskIndex = data.subtasks.findIndex((st) => st.id === id);
+
+      if (subtaskIndex === -1) {
         throw new NotFoundError('Subtask', id);
       }
 
       if (updates.title !== undefined) {
         validateSubtaskTitle(updates.title);
-      }
-
-      const updateData: Partial<typeof subtasks.$inferInsert> = {
-        updatedAt: new Date(),
-      };
-
-      if (updates.title !== undefined) {
-        updateData.title = updates.title.trim();
+        data.subtasks[subtaskIndex].title = updates.title.trim();
       }
       if (updates.isCompleted !== undefined) {
-        updateData.isCompleted = updates.isCompleted;
+        data.subtasks[subtaskIndex].isCompleted = updates.isCompleted;
       }
 
-      await db.update(subtasks).set(updateData).where(eq(subtasks.id, id));
+      data.subtasks[subtaskIndex].updatedAt = new Date().toISOString();
+      saveStorageData(data);
 
-      const updatedSubtask = await this.getSubtask(id);
-      if (!updatedSubtask) {
-        throw new StorageError('Failed to retrieve updated subtask');
-      }
-
-      return updatedSubtask;
+      const updated = data.subtasks[subtaskIndex];
+      return {
+        id: updated.id,
+        taskId: updated.taskId,
+        title: updated.title,
+        isCompleted: updated.isCompleted,
+        position: updated.position,
+        createdAt: new Date(updated.createdAt),
+        updatedAt: new Date(updated.updatedAt),
+      };
     } catch (error) {
-      if (error instanceof NotFoundError || error instanceof StorageError) {
+      if (error instanceof NotFoundError) {
         throw error;
       }
       throw new StorageError('Failed to update subtask', error as Error);
     }
   }
 
-  /**
-   * Delete a subtask
-   */
   static async deleteSubtask(id: string): Promise<void> {
     try {
-      const subtask = await this.getSubtask(id);
-      if (!subtask) {
+      const data = getStorageData();
+      const subtaskIndex = data.subtasks.findIndex((st) => st.id === id);
+
+      if (subtaskIndex === -1) {
         throw new NotFoundError('Subtask', id);
       }
 
-      await db.delete(subtasks).where(eq(subtasks.id, id));
+      data.subtasks.splice(subtaskIndex, 1);
+      saveStorageData(data);
     } catch (error) {
       if (error instanceof NotFoundError) {
         throw error;
@@ -170,9 +160,6 @@ export class SubtaskService {
     }
   }
 
-  /**
-   * Toggle subtask completion status
-   */
   static async toggleSubtask(id: string): Promise<Subtask> {
     try {
       const subtask = await this.getSubtask(id);

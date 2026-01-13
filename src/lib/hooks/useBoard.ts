@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { BoardService } from '@/lib/services/BoardService';
 import type { Board } from '@/types';
 
 export function useBoard() {
@@ -13,16 +14,12 @@ export function useBoard() {
   const loadBoards = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/boards');
-      if (!response.ok) {
-        throw new Error('Failed to load boards');
-      }
-      const data = await response.json();
-      setBoards(data.boards);
+      const allBoards = await BoardService.getAllBoards();
+      setBoards(allBoards);
       
       // Set first board as current if none selected
-      if (data.boards.length > 0 && !currentBoardId) {
-        setCurrentBoardId(data.boards[0].id);
+      if (allBoards.length > 0 && !currentBoardId) {
+        setCurrentBoardId(allBoards[0].id);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load boards');
@@ -34,23 +31,9 @@ export function useBoard() {
   // Create a new board
   const createBoard = useCallback(async (name: string): Promise<Board> => {
     try {
-      const response = await fetch('/api/boards', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error?.message || 'Failed to create board');
-      }
-
-      const data = await response.json();
-      const newBoard = data.board;
-      
+      const newBoard = await BoardService.createBoard(name);
       setBoards((prev) => [...prev, newBoard]);
       setCurrentBoardId(newBoard.id);
-      
       return newBoard;
     } catch (err) {
       throw err;
@@ -60,15 +43,7 @@ export function useBoard() {
   // Delete a board
   const deleteBoard = useCallback(async (id: string): Promise<void> => {
     try {
-      const response = await fetch(`/api/boards/${id}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error?.message || 'Failed to delete board');
-      }
-
+      await BoardService.deleteBoard(id);
       setBoards((prev) => {
         const filtered = prev.filter((b) => b.id !== id);
         

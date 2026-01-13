@@ -19,7 +19,7 @@ interface BoardViewProps {
   columns: ColumnType[];
   tasks: Task[];
   onTaskClick: (task: Task) => void;
-  onAddTask: (columnId: string) => void;
+  onAddTask: () => void;
   onTaskMove?: (taskId: string, targetColumnId: string, newPosition: number) => void;
   onColumnEdit?: (column: ColumnType) => void;
 }
@@ -111,7 +111,7 @@ export function BoardView({
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <div className="flex gap-6 p-6 overflow-x-auto h-full">
+      <div className="flex gap-6 p-6 overflow-x-auto h-full relative">
         <SortableContext
           items={columns.map((c) => c.id)}
           strategy={horizontalListSortingStrategy}
@@ -122,11 +122,21 @@ export function BoardView({
               column={column}
               tasks={tasksByColumn[column.id] || []}
               onTaskClick={onTaskClick}
-              onAddTask={onAddTask}
               onEdit={onColumnEdit}
             />
           ))}
         </SortableContext>
+      </div>
+
+      {/* Single Add Task Button */}
+      <div className="absolute bottom-6 right-6">
+        <button
+          onClick={onAddTask}
+          aria-label="Add new task"
+          className="px-6 py-3 rounded-lg bg-main-purple text-white text-heading-m hover:bg-main-purple-hover transition-colors focus:outline-none focus:ring-2 focus:ring-main-purple shadow-lg"
+        >
+          + New Task
+        </button>
       </div>
 
       <DragOverlay>

@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useCallback } from 'react';
+import { TaskService } from '@/lib/services/TaskService';
+import { SubtaskService } from '@/lib/services/SubtaskService';
 import type { Task, Subtask } from '@/types';
 
 export function useTask() {
@@ -16,20 +18,26 @@ export function useTask() {
     try {
       setLoading(true);
       setError(null);
+      return await TaskService.createTask(columnId, boardId, title, description);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to create task';
+      setError(errorMessage);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-      const response = await fetch('/api/tasks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ columnId, boardId, title, description }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error?.message || 'Failed to create task');
-      }
-
-      const data = await response.json();
-      return data.task;
+  const createTaskByStatus = useCallback(async (
+    boardId: string,
+    status: 'todo' | 'doing' | 'done',
+    title: string,
+    description?: string | null
+  ): Promise<Task> => {
+    try {
+      setLoading(true);
+      setError(null);
+      return await TaskService.createTaskByStatus(boardId, status, title, description);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to create task';
       setError(errorMessage);
@@ -44,25 +52,16 @@ export function useTask() {
       setLoading(true);
       setError(null);
 
-      const [taskResponse, subtasksResponse] = await Promise.all([
-        fetch(`/api/tasks/${id}`),
-        fetch(`/api/tasks/${id}/subtasks`),
+      const [task, subtasks] = await Promise.all([
+        TaskService.getTask(id),
+        SubtaskService.getSubtasksByTask(id),
       ]);
 
-      if (!taskResponse.ok) {
-        throw new Error('Failed to fetch task');
+      if (!task) {
+        throw new Error('Task not found');
       }
 
-      const taskData = await taskResponse.json();
-      const task = taskData.task;
-
-      // Fetch subtasks
-      if (subtasksResponse.ok) {
-        const subtasksData = await subtasksResponse.json();
-        return { ...task, subtasks: subtasksData.subtasks || [] };
-      }
-
-      return { ...task, subtasks: [] };
+      return { ...task, subtasks };
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch task';
       setError(errorMessage);
@@ -79,20 +78,7 @@ export function useTask() {
     try {
       setLoading(true);
       setError(null);
-
-      const response = await fetch(`/api/tasks/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error?.message || 'Failed to update task');
-      }
-
-      const data = await response.json();
-      return data.task;
+      return await TaskService.updateTask(id, updates);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to update task';
       setError(errorMessage);
@@ -106,15 +92,7 @@ export function useTask() {
     try {
       setLoading(true);
       setError(null);
-
-      const response = await fetch(`/api/tasks/${id}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error?.message || 'Failed to delete task');
-      }
+      await TaskService.deleteTask(id);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to delete task';
       setError(errorMessage);
@@ -128,20 +106,7 @@ export function useTask() {
     try {
       setLoading(true);
       setError(null);
-
-      const response = await fetch('/api/subtasks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ taskId, title }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error?.message || 'Failed to create subtask');
-      }
-
-      const data = await response.json();
-      return data.subtask;
+      return await SubtaskService.createSubtask(taskId, title);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to create subtask';
       setError(errorMessage);
@@ -155,20 +120,7 @@ export function useTask() {
     try {
       setLoading(true);
       setError(null);
-
-      const response = await fetch(`/api/subtasks/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ toggle: true }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error?.message || 'Failed to toggle subtask');
-      }
-
-      const data = await response.json();
-      return data.subtask;
+      return await SubtaskService.toggleSubtask(id);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to toggle subtask';
       setError(errorMessage);
@@ -186,20 +138,7 @@ export function useTask() {
     try {
       setLoading(true);
       setError(null);
-
-      const response = await fetch('/api/tasks/move', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ taskId, targetColumnId, newPosition }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error?.message || 'Failed to move task');
-      }
-
-      const data = await response.json();
-      return data.task;
+      return await TaskService.moveTask(taskId, targetColumnId, newPosition);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to move task';
       setError(errorMessage);
@@ -213,6 +152,7 @@ export function useTask() {
     loading,
     error,
     createTask,
+    createTaskByStatus,
     getTask,
     updateTask,
     deleteTask,

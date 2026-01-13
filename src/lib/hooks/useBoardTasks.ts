@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
+import { TaskService } from '@/lib/services/TaskService';
 import type { Task } from '@/types';
 
 export function useBoardTasks(boardId: string | null) {
@@ -18,13 +19,8 @@ export function useBoardTasks(boardId: string | null) {
       setLoading(true);
       setError(null);
 
-      const response = await fetch(`/api/boards/${boardId}/tasks`);
-      if (!response.ok) {
-        throw new Error('Failed to load tasks');
-      }
-
-      const data = await response.json();
-      setTasks(data.tasks || []);
+      const boardTasks = await TaskService.getTasksByBoard(boardId);
+      setTasks(boardTasks);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to load tasks';
       setError(errorMessage);

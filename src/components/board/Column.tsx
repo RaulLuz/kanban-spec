@@ -9,7 +9,6 @@ interface ColumnProps {
   column: ColumnType;
   tasks: Task[];
   onTaskClick: (task: Task) => void;
-  onAddTask: (columnId: string) => void;
   onEdit?: (column: ColumnType) => void;
 }
 
@@ -17,7 +16,7 @@ interface ColumnProps {
  * Column component - displays a column with its tasks
  * Supports drag and drop for tasks within the column
  */
-function ColumnComponent({ column, tasks, onTaskClick, onAddTask, onEdit }: ColumnProps) {
+function ColumnComponent({ column, tasks, onTaskClick, onEdit }: ColumnProps) {
   const taskCount = tasks.length;
   const taskIds = tasks.map((t) => t.id);
 
@@ -53,14 +52,6 @@ function ColumnComponent({ column, tasks, onTaskClick, onAddTask, onEdit }: Colu
           ))}
         </div>
       </SortableContext>
-
-      <button
-        onClick={() => onAddTask(column.id)}
-        aria-label={`Add new task to ${column.name} column`}
-        className="w-full py-4 mt-5 rounded-lg bg-light-grey dark:bg-very-dark-grey text-heading-m text-main-purple hover:bg-main-purple hover:bg-opacity-10 transition-colors focus:outline-none focus:ring-2 focus:ring-main-purple"
-      >
-        + New Task
-      </button>
     </div>
   );
 }

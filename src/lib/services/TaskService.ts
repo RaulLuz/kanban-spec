@@ -1,15 +1,20 @@
-import { db } from '../db';
-import { tasks, columns } from '../db/schema';
-import { generateId } from '../utils/uuid';
+import { getStorageData, saveStorageData, generateId } from '../storage/localStorage';
 import { validateTaskTitle, validateTaskDescription } from '../utils/validation';
 import { NotFoundError, StorageError } from '../utils/errors';
-import { eq, and } from 'drizzle-orm';
 import type { Task } from '@/types';
 
 export class TaskService {
   /**
-   * Create a new task in a column
+   * Find column by status (todo, doing, done) for a board
    */
+  static findColumnByStatus(boardId: string, status: 'todo' | 'doing' | 'done'): string | null {
+    const data = getStorageData();
+    const column = data.columns.find(
+      (c) => c.boardId === boardId && c.name.toLowerCase() === status
+    );
+    return column?.id || null;
+  }
+
   static async createTask(
     columnId: string,
     boardId: string,
@@ -20,48 +25,57 @@ export class TaskService {
       validateTaskTitle(title);
       validateTaskDescription(description);
 
-      // Verify column exists and belongs to board
-      const column = await db
-        .select()
-        .from(columns)
-        .where(and(eq(columns.id, columnId), eq(columns.boardId, boardId)))
-        .limit(1);
+      const data = getStorageData();
 
-      if (column.length === 0) {
+      // Verify column exists and belongs to board
+      const column = data.columns.find((c) => c.id === columnId && c.boardId === boardId);
+      if (!column) {
         throw new NotFoundError('Column', columnId);
       }
 
       // Get current max position in column
-      const existingTasks = await db
-        .select()
-        .from(tasks)
-        .where(eq(tasks.columnId, columnId))
-        .orderBy(tasks.position);
+      const existingTasks = data.tasks
+        .filter((t) => t.columnId === columnId)
+        .sort((a, b) => a.position - b.position);
 
       const position = existingTasks.length;
 
       const taskId = generateId();
       const now = new Date();
 
-      await db.insert(tasks).values({
+      const newTask = {
         id: taskId,
         columnId,
         boardId,
         title: title.trim(),
         description: description?.trim() || null,
         position,
-        createdAt: now,
-        updatedAt: now,
-      });
+        createdAt: now.toISOString(),
+        updatedAt: now.toISOString(),
+      };
 
-      const task = await this.getTask(taskId);
-      if (!task) {
-        throw new StorageError('Failed to retrieve created task');
-      }
+      data.tasks.push(newTask);
+      saveStorageData(data);
 
-      return task;
+      // Get column to derive status
+      const taskColumn = data.columns.find((c) => c.id === columnId);
+      const status = taskColumn
+        ? (taskColumn.name.toLowerCase() as 'todo' | 'doing' | 'done')
+        : undefined;
+
+      return {
+        id: newTask.id,
+        columnId: newTask.columnId,
+        boardId: newTask.boardId,
+        title: newTask.title,
+        description: newTask.description,
+        position: newTask.position,
+        createdAt: new Date(newTask.createdAt),
+        updatedAt: new Date(newTask.updatedAt),
+        status,
+      };
     } catch (error) {
-      if (error instanceof NotFoundError || error instanceof StorageError) {
+      if (error instanceof NotFoundError) {
         throw error;
       }
       throw new StorageError('Failed to create task', error as Error);
@@ -69,38 +83,45 @@ export class TaskService {
   }
 
   /**
-   * Get a task by ID
+   * Create a task by status (finds the appropriate column)
    */
+  static async createTaskByStatus(
+    boardId: string,
+    status: 'todo' | 'doing' | 'done',
+    title: string,
+    description: string | null = null
+  ): Promise<Task> {
+    const columnId = this.findColumnByStatus(boardId, status);
+    if (!columnId) {
+      throw new NotFoundError('Column', `No column found for status: ${status}`);
+    }
+    return this.createTask(columnId, boardId, title, description);
+  }
+
   static async getTask(id: string): Promise<Task | null> {
     try {
-      const result = await db.select().from(tasks).where(eq(tasks.id, id)).limit(1);
+      const data = getStorageData();
+      const task = data.tasks.find((t) => t.id === id);
 
-      if (result.length === 0) {
+      if (!task) {
         return null;
       }
 
-      const taskData = result[0];
-      
       // Get column name to derive status
-      const column = await db
-        .select()
-        .from(columns)
-        .where(eq(columns.id, taskData.columnId))
-        .limit(1);
-
-      const status = column.length > 0 
-        ? column[0].name.toLowerCase() as 'todo' | 'doing' | 'done'
+      const column = data.columns.find((c) => c.id === task.columnId);
+      const status = column
+        ? (column.name.toLowerCase() as 'todo' | 'doing' | 'done')
         : undefined;
 
       return {
-        id: taskData.id,
-        columnId: taskData.columnId,
-        boardId: taskData.boardId,
-        title: taskData.title,
-        description: taskData.description,
-        position: taskData.position,
-        createdAt: taskData.createdAt,
-        updatedAt: taskData.updatedAt,
+        id: task.id,
+        columnId: task.columnId,
+        boardId: task.boardId,
+        title: task.title,
+        description: task.description,
+        position: task.position,
+        createdAt: new Date(task.createdAt),
+        updatedAt: new Date(task.updatedAt),
         status,
       };
     } catch (error) {
@@ -108,27 +129,17 @@ export class TaskService {
     }
   }
 
-  /**
-   * Get all tasks for a column
-   */
   static async getTasksByColumn(columnId: string): Promise<Task[]> {
     try {
-      const results = await db
-        .select()
-        .from(tasks)
-        .where(eq(tasks.columnId, columnId))
-        .orderBy(tasks.position);
-
-      // Get column for status derivation
-      const column = await db
-        .select()
-        .from(columns)
-        .where(eq(columns.id, columnId))
-        .limit(1);
-
-      const status = column.length > 0
-        ? column[0].name.toLowerCase() as 'todo' | 'doing' | 'done'
+      const data = getStorageData();
+      const column = data.columns.find((c) => c.id === columnId);
+      const status = column
+        ? (column.name.toLowerCase() as 'todo' | 'doing' | 'done')
         : undefined;
+
+      const results = data.tasks
+        .filter((t) => t.columnId === columnId)
+        .sort((a, b) => a.position - b.position);
 
       return results.map((task) => ({
         id: task.id,
@@ -137,8 +148,8 @@ export class TaskService {
         title: task.title,
         description: task.description,
         position: task.position,
-        createdAt: task.createdAt,
-        updatedAt: task.updatedAt,
+        createdAt: new Date(task.createdAt),
+        updatedAt: new Date(task.updatedAt),
         status,
       }));
     } catch (error) {
@@ -146,24 +157,20 @@ export class TaskService {
     }
   }
 
-  /**
-   * Get all tasks for a board
-   */
   static async getTasksByBoard(boardId: string): Promise<Task[]> {
     try {
-      const results = await db
-        .select()
-        .from(tasks)
-        .where(eq(tasks.boardId, boardId))
-        .orderBy(tasks.columnId, tasks.position);
-
-      // Get columns for status derivation
-      const boardColumns = await db
-        .select()
-        .from(columns)
-        .where(eq(columns.boardId, boardId));
-
+      const data = getStorageData();
+      const boardColumns = data.columns.filter((c) => c.boardId === boardId);
       const columnMap = new Map(boardColumns.map((c) => [c.id, c.name.toLowerCase()]));
+
+      const results = data.tasks
+        .filter((t) => t.boardId === boardId)
+        .sort((a, b) => {
+          if (a.columnId !== b.columnId) {
+            return a.columnId.localeCompare(b.columnId);
+          }
+          return a.position - b.position;
+        });
 
       return results.map((task) => ({
         id: task.id,
@@ -172,8 +179,8 @@ export class TaskService {
         title: task.title,
         description: task.description,
         position: task.position,
-        createdAt: task.createdAt,
-        updatedAt: task.updatedAt,
+        createdAt: new Date(task.createdAt),
+        updatedAt: new Date(task.updatedAt),
         status: columnMap.get(task.columnId) as 'todo' | 'doing' | 'done' | undefined,
       }));
     } catch (error) {
@@ -181,87 +188,85 @@ export class TaskService {
     }
   }
 
-  /**
-   * Update task properties
-   */
   static async updateTask(
     id: string,
     updates: Partial<Pick<Task, 'title' | 'description' | 'columnId'>>
   ): Promise<Task> {
     try {
-      const task = await this.getTask(id);
-      if (!task) {
+      const data = getStorageData();
+      const taskIndex = data.tasks.findIndex((t) => t.id === id);
+
+      if (taskIndex === -1) {
         throw new NotFoundError('Task', id);
       }
 
       if (updates.title !== undefined) {
         validateTaskTitle(updates.title);
+        data.tasks[taskIndex].title = updates.title.trim();
       }
       if (updates.description !== undefined) {
         validateTaskDescription(updates.description);
-      }
-
-      const updateData: Partial<typeof tasks.$inferInsert> = {
-        updatedAt: new Date(),
-      };
-
-      if (updates.title !== undefined) {
-        updateData.title = updates.title.trim();
-      }
-      if (updates.description !== undefined) {
-        updateData.description = updates.description?.trim() || null;
+        data.tasks[taskIndex].description = updates.description?.trim() || null;
       }
       if (updates.columnId !== undefined) {
         // Verify new column exists
-        const column = await db
-          .select()
-          .from(columns)
-          .where(eq(columns.id, updates.columnId))
-          .limit(1);
-
-        if (column.length === 0) {
+        const column = data.columns.find((c) => c.id === updates.columnId);
+        if (!column) {
           throw new NotFoundError('Column', updates.columnId);
         }
 
         // Get new position in target column
-        const existingTasks = await db
-          .select()
-          .from(tasks)
-          .where(eq(tasks.columnId, updates.columnId))
-          .orderBy(tasks.position);
+        const existingTasks = data.tasks
+          .filter((t) => t.columnId === updates.columnId)
+          .sort((a, b) => a.position - b.position);
 
-        updateData.columnId = updates.columnId;
-        updateData.position = existingTasks.length;
-        updateData.boardId = column[0].boardId; // Update boardId to match new column
+        data.tasks[taskIndex].columnId = updates.columnId;
+        data.tasks[taskIndex].boardId = column.boardId;
+        data.tasks[taskIndex].position = existingTasks.length;
       }
 
-      await db.update(tasks).set(updateData).where(eq(tasks.id, id));
+      data.tasks[taskIndex].updatedAt = new Date().toISOString();
+      saveStorageData(data);
 
-      const updatedTask = await this.getTask(id);
-      if (!updatedTask) {
-        throw new StorageError('Failed to retrieve updated task');
-      }
+      const updated = data.tasks[taskIndex];
+      const column = data.columns.find((c) => c.id === updated.columnId);
+      const status = column
+        ? (column.name.toLowerCase() as 'todo' | 'doing' | 'done')
+        : undefined;
 
-      return updatedTask;
+      return {
+        id: updated.id,
+        columnId: updated.columnId,
+        boardId: updated.boardId,
+        title: updated.title,
+        description: updated.description,
+        position: updated.position,
+        createdAt: new Date(updated.createdAt),
+        updatedAt: new Date(updated.updatedAt),
+        status,
+      };
     } catch (error) {
-      if (error instanceof NotFoundError || error instanceof StorageError) {
+      if (error instanceof NotFoundError) {
         throw error;
       }
       throw new StorageError('Failed to update task', error as Error);
     }
   }
 
-  /**
-   * Delete a task
-   */
   static async deleteTask(id: string): Promise<void> {
     try {
-      const task = await this.getTask(id);
-      if (!task) {
+      const data = getStorageData();
+      const taskIndex = data.tasks.findIndex((t) => t.id === id);
+
+      if (taskIndex === -1) {
         throw new NotFoundError('Task', id);
       }
 
-      await db.delete(tasks).where(eq(tasks.id, id));
+      // Delete task and associated subtasks
+      data.tasks.splice(taskIndex, 1);
+      data.subtasks = data.subtasks.filter((st) => st.taskId !== id);
+
+      saveStorageData(data);
     } catch (error) {
       if (error instanceof NotFoundError) {
         throw error;
@@ -270,45 +275,43 @@ export class TaskService {
     }
   }
 
-  /**
-   * Move task to a different column and position
-   */
   static async moveTask(
     taskId: string,
     targetColumnId: string,
     newPosition: number
   ): Promise<Task> {
     try {
-      const task = await this.getTask(taskId);
-      if (!task) {
+      const data = getStorageData();
+      const taskIndex = data.tasks.findIndex((t) => t.id === taskId);
+
+      if (taskIndex === -1) {
         throw new NotFoundError('Task', taskId);
       }
 
-      // Verify target column exists
-      const column = await db
-        .select()
-        .from(columns)
-        .where(eq(columns.id, targetColumnId))
-        .limit(1);
+      const task = data.tasks[taskIndex];
 
-      if (column.length === 0) {
+      // Verify target column exists
+      const column = data.columns.find((c) => c.id === targetColumnId);
+      if (!column) {
         throw new NotFoundError('Column', targetColumnId);
       }
 
       // Get all tasks in target column
-      const targetTasks = await db
-        .select()
-        .from(tasks)
-        .where(eq(tasks.columnId, targetColumnId))
-        .orderBy(tasks.position);
+      const targetTasks = data.tasks
+        .filter((t) => t.columnId === targetColumnId)
+        .sort((a, b) => a.position - b.position);
 
       // Adjust positions
-      const tasksToUpdate: Array<{ id: string; position: number }> = [];
-
-      // If moving within same column
       if (task.columnId === targetColumnId) {
+        // Moving within same column
         const currentIndex = targetTasks.findIndex((t) => t.id === taskId);
-        if (currentIndex === -1) return task;
+        if (currentIndex === -1) {
+          const foundTask = await this.getTask(taskId);
+          if (!foundTask) {
+            throw new NotFoundError('Task', taskId);
+          }
+          return foundTask;
+        }
 
         // Reorder within same column
         targetTasks.forEach((t, index) => {
@@ -316,60 +319,46 @@ export class TaskService {
           let newPos = index;
           if (index >= newPosition) newPos = index + 1;
           if (newPos !== t.position) {
-            tasksToUpdate.push({ id: t.id, position: newPos });
+            const tIndex = data.tasks.findIndex((task) => task.id === t.id);
+            if (tIndex !== -1) {
+              data.tasks[tIndex].position = newPos;
+            }
           }
         });
-        tasksToUpdate.push({ id: taskId, position: newPosition });
+        data.tasks[taskIndex].position = newPosition;
       } else {
         // Moving to different column
         // Shift tasks in target column
         targetTasks.forEach((t, index) => {
           if (index >= newPosition) {
-            tasksToUpdate.push({ id: t.id, position: index + 1 });
+            const tIndex = data.tasks.findIndex((task) => task.id === t.id);
+            if (tIndex !== -1) {
+              data.tasks[tIndex].position = index + 1;
+            }
           }
         });
 
         // Shift tasks in source column
-        const sourceTasks = await db
-          .select()
-          .from(tasks)
-          .where(eq(tasks.columnId, task.columnId))
-          .orderBy(tasks.position);
+        const sourceTasks = data.tasks
+          .filter((t) => t.columnId === task.columnId)
+          .sort((a, b) => a.position - b.position);
 
         sourceTasks.forEach((t) => {
           if (t.position > task.position) {
-            tasksToUpdate.push({ id: t.id, position: t.position - 1 });
+            const tIndex = data.tasks.findIndex((task) => task.id === t.id);
+            if (tIndex !== -1) {
+              data.tasks[tIndex].position = t.position - 1;
+            }
           }
         });
 
-        tasksToUpdate.push({
-          id: taskId,
-          position: newPosition,
-        });
+        data.tasks[taskIndex].columnId = targetColumnId;
+        data.tasks[taskIndex].boardId = column.boardId;
+        data.tasks[taskIndex].position = newPosition;
       }
 
-      // Update all positions
-      for (const update of tasksToUpdate) {
-        if (update.id === taskId) {
-          await db
-            .update(tasks)
-            .set({
-              columnId: targetColumnId,
-              boardId: column[0].boardId,
-              position: update.position,
-              updatedAt: new Date(),
-            })
-            .where(eq(tasks.id, update.id));
-        } else {
-          await db
-            .update(tasks)
-            .set({
-              position: update.position,
-              updatedAt: new Date(),
-            })
-            .where(eq(tasks.id, update.id));
-        }
-      }
+      data.tasks[taskIndex].updatedAt = new Date().toISOString();
+      saveStorageData(data);
 
       const movedTask = await this.getTask(taskId);
       if (!movedTask) {

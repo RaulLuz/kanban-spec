@@ -1,16 +1,10 @@
-import { db } from '../db';
-import { columns } from '../db/schema';
-import { generateId } from '../utils/uuid';
+import { getStorageData, saveStorageData, generateId } from '../storage/localStorage';
 import { validateColumnName, validateColor } from '../utils/validation';
 import { NotFoundError, StorageError, BusinessRuleError } from '../utils/errors';
-import { eq } from 'drizzle-orm';
 import { DEFAULT_COLUMN_COLOR } from '../utils/constants';
 import type { Column } from '@/types';
 
 export class ColumnService {
-  /**
-   * Create a new column in a board
-   */
   static async createColumn(
     boardId: string,
     name: string,
@@ -21,54 +15,51 @@ export class ColumnService {
       validateColumnName(name);
       validateColor(color);
 
+      const data = getStorageData();
+      
       // Get current max position if not provided
       let columnPosition = position;
       if (columnPosition === undefined) {
-        const existingColumns = await db
-          .select()
-          .from(columns)
-          .where(eq(columns.boardId, boardId))
-          .orderBy(columns.position);
+        const existingColumns = data.columns.filter((c) => c.boardId === boardId);
         columnPosition = existingColumns.length;
       }
 
       const columnId = generateId();
       const now = new Date();
 
-      await db.insert(columns).values({
+      const newColumn = {
         id: columnId,
         boardId,
         name: name.trim(),
         color,
         position: columnPosition,
-        createdAt: now,
-        updatedAt: now,
-      });
+        createdAt: now.toISOString(),
+        updatedAt: now.toISOString(),
+      };
 
-      const column = await this.getColumn(columnId);
-      if (!column) {
-        throw new StorageError('Failed to retrieve created column');
-      }
+      data.columns.push(newColumn);
+      saveStorageData(data);
 
-      return column;
+      return {
+        id: newColumn.id,
+        boardId: newColumn.boardId,
+        name: newColumn.name,
+        color: newColumn.color,
+        position: newColumn.position,
+        createdAt: new Date(newColumn.createdAt),
+        updatedAt: new Date(newColumn.updatedAt),
+      };
     } catch (error) {
-      if (error instanceof StorageError) {
-        throw error;
-      }
       throw new StorageError('Failed to create column', error as Error);
     }
   }
 
-  /**
-   * Get all columns for a board
-   */
   static async getColumnsByBoard(boardId: string): Promise<Column[]> {
     try {
-      const results = await db
-        .select()
-        .from(columns)
-        .where(eq(columns.boardId, boardId))
-        .orderBy(columns.position);
+      const data = getStorageData();
+      const results = data.columns
+        .filter((c) => c.boardId === boardId)
+        .sort((a, b) => a.position - b.position);
 
       return results.map((column) => ({
         id: column.id,
@@ -76,107 +67,108 @@ export class ColumnService {
         name: column.name,
         color: column.color,
         position: column.position,
-        createdAt: column.createdAt,
-        updatedAt: column.updatedAt,
+        createdAt: new Date(column.createdAt),
+        updatedAt: new Date(column.updatedAt),
       }));
     } catch (error) {
       throw new StorageError('Failed to retrieve columns', error as Error);
     }
   }
 
-  /**
-   * Get a column by ID
-   */
   static async getColumn(id: string): Promise<Column | null> {
     try {
-      const result = await db.select().from(columns).where(eq(columns.id, id)).limit(1);
+      const data = getStorageData();
+      const column = data.columns.find((c) => c.id === id);
 
-      if (result.length === 0) {
+      if (!column) {
         return null;
       }
 
-      const columnData = result[0];
       return {
-        id: columnData.id,
-        boardId: columnData.boardId,
-        name: columnData.name,
-        color: columnData.color,
-        position: columnData.position,
-        createdAt: columnData.createdAt,
-        updatedAt: columnData.updatedAt,
+        id: column.id,
+        boardId: column.boardId,
+        name: column.name,
+        color: column.color,
+        position: column.position,
+        createdAt: new Date(column.createdAt),
+        updatedAt: new Date(column.updatedAt),
       };
     } catch (error) {
       throw new StorageError('Failed to retrieve column', error as Error);
     }
   }
 
-  /**
-   * Update column properties
-   */
   static async updateColumn(
     id: string,
     updates: Partial<Pick<Column, 'name' | 'color' | 'position'>>
   ): Promise<Column> {
     try {
-      const column = await this.getColumn(id);
-      if (!column) {
+      const data = getStorageData();
+      const columnIndex = data.columns.findIndex((c) => c.id === id);
+
+      if (columnIndex === -1) {
         throw new NotFoundError('Column', id);
       }
 
       if (updates.name !== undefined) {
         validateColumnName(updates.name);
+        data.columns[columnIndex].name = updates.name.trim();
       }
       if (updates.color !== undefined) {
         validateColor(updates.color);
-      }
-
-      const updateData: Partial<typeof columns.$inferInsert> = {
-        updatedAt: new Date(),
-      };
-
-      if (updates.name !== undefined) {
-        updateData.name = updates.name.trim();
-      }
-      if (updates.color !== undefined) {
-        updateData.color = updates.color;
+        data.columns[columnIndex].color = updates.color;
       }
       if (updates.position !== undefined) {
-        updateData.position = updates.position;
+        data.columns[columnIndex].position = updates.position;
       }
 
-      await db.update(columns).set(updateData).where(eq(columns.id, id));
+      data.columns[columnIndex].updatedAt = new Date().toISOString();
+      saveStorageData(data);
 
-      const updatedColumn = await this.getColumn(id);
-      if (!updatedColumn) {
-        throw new StorageError('Failed to retrieve updated column');
-      }
-
-      return updatedColumn;
+      const updated = data.columns[columnIndex];
+      return {
+        id: updated.id,
+        boardId: updated.boardId,
+        name: updated.name,
+        color: updated.color,
+        position: updated.position,
+        createdAt: new Date(updated.createdAt),
+        updatedAt: new Date(updated.updatedAt),
+      };
     } catch (error) {
-      if (error instanceof NotFoundError || error instanceof StorageError) {
+      if (error instanceof NotFoundError) {
         throw error;
       }
       throw new StorageError('Failed to update column', error as Error);
     }
   }
 
-  /**
-   * Delete a column
-   */
   static async deleteColumn(id: string): Promise<void> {
     try {
-      const column = await this.getColumn(id);
-      if (!column) {
+      const data = getStorageData();
+      const columnIndex = data.columns.findIndex((c) => c.id === id);
+
+      if (columnIndex === -1) {
         throw new NotFoundError('Column', id);
       }
 
+      const column = data.columns[columnIndex];
+
       // Check if this is the last column in the board
-      const allColumns = await this.getColumnsByBoard(column.boardId);
+      const allColumns = data.columns.filter((c) => c.boardId === column.boardId);
       if (allColumns.length === 1) {
         throw new BusinessRuleError('Cannot delete the last remaining column in a board');
       }
 
-      await db.delete(columns).where(eq(columns.id, id));
+      // Delete column and associated tasks/subtasks
+      data.columns.splice(columnIndex, 1);
+      data.tasks = data.tasks.filter((t) => t.columnId !== id);
+      data.subtasks = data.subtasks.filter((st) => {
+        const task = data.tasks.find((t) => t.id === st.taskId);
+        return task && task.columnId !== id;
+      });
+
+      saveStorageData(data);
     } catch (error) {
       if (error instanceof NotFoundError || error instanceof BusinessRuleError) {
         throw error;

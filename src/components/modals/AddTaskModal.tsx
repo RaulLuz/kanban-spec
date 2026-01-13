@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { TaskForm } from '../task/TaskForm';
 import { useTask } from '@/lib/hooks/useTask';
-import type { Column } from '@/types';
 
 // Close modal on Escape key for all modals
 const useModalClose = (isOpen: boolean, onClose: () => void) => {
@@ -24,33 +23,25 @@ const useModalClose = (isOpen: boolean, onClose: () => void) => {
 interface AddTaskModalProps {
   isOpen: boolean;
   onClose: () => void;
-  columnId: string;
   boardId: string;
-  columns: Column[];
   onTaskCreated?: () => void;
 }
 
 export function AddTaskModal({
   isOpen,
   onClose,
-  columnId,
   boardId,
-  columns,
   onTaskCreated,
 }: AddTaskModalProps) {
-  const { createTask, loading } = useTask();
-  const [selectedColumnId, setSelectedColumnId] = useState(columnId);
-
-  useEffect(() => {
-    setSelectedColumnId(columnId);
-  }, [columnId]);
+  const { createTaskByStatus, loading } = useTask();
+  const [selectedStatus, setSelectedStatus] = useState<'todo' | 'doing' | 'done'>('todo');
 
   useModalClose(isOpen, onClose);
 
   if (!isOpen) return null;
 
   const handleSubmit = async (title: string, description: string | null) => {
-    await createTask(selectedColumnId, boardId, title, description);
+    await createTaskByStatus(boardId, selectedStatus, title, description);
     onTaskCreated?.();
     onClose();
   };
@@ -61,20 +52,18 @@ export function AddTaskModal({
         <h2 className="text-heading-l text-black dark:text-white mb-6">Add New Task</h2>
 
         <div className="mb-6">
-          <label htmlFor="task-column" className="block text-body-m text-medium-grey mb-2">
+          <label htmlFor="task-status" className="block text-body-m text-medium-grey mb-2">
             Status
           </label>
           <select
-            id="task-column"
-            value={selectedColumnId}
-            onChange={(e) => setSelectedColumnId(e.target.value)}
+            id="task-status"
+            value={selectedStatus}
+            onChange={(e) => setSelectedStatus(e.target.value as 'todo' | 'doing' | 'done')}
             className="w-full px-4 py-2 rounded border border-medium-grey border-opacity-25 bg-white dark:bg-dark-grey text-black dark:text-white focus:outline-none focus:border-main-purple"
           >
-            {columns.map((column) => (
-              <option key={column.id} value={column.id}>
-                {column.name}
-              </option>
-            ))}
+            <option value="todo">Todo</option>
+            <option value="doing">Doing</option>
+            <option value="done">Done</option>
           </select>
         </div>
 

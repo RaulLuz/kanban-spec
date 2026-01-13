@@ -43,15 +43,13 @@ export function BoardProvider({ children }: BoardProviderProps) {
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [themeLoaded, setThemeLoaded] = useState(false);
 
-  // Load theme from database on mount
+  // Load theme from localStorage on mount
   useEffect(() => {
     const loadTheme = async () => {
       try {
-        const response = await fetch('/api/theme');
-        if (response.ok) {
-          const data = await response.json();
-          setTheme(data.theme);
-        }
+        const { ThemeService } = await import('@/lib/services/ThemeService');
+        const currentTheme = await ThemeService.getTheme();
+        setTheme(currentTheme);
       } catch (error) {
         console.error('Failed to load theme:', error);
       } finally {
@@ -81,24 +79,12 @@ export function BoardProvider({ children }: BoardProviderProps) {
   };
 
   const toggleTheme = async () => {
-    // Debounce rapid toggling
-    const newTheme = theme === 'light' ? 'dark' : 'light';
-    setTheme(newTheme); // Optimistic update
-    
     try {
-      const response = await fetch('/api/theme/toggle', {
-        method: 'POST',
-      });
-      if (!response.ok) {
-        // Revert on error
-        setTheme(theme);
-        throw new Error('Failed to toggle theme');
-      }
-      const data = await response.json();
-      setTheme(data.theme);
+      const { ThemeService } = await import('@/lib/services/ThemeService');
+      const newTheme = await ThemeService.toggleTheme();
+      setTheme(newTheme);
     } catch (error) {
       console.error('Failed to toggle theme:', error);
-      // Already reverted above
     }
   };
 

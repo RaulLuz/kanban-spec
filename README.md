@@ -1,6 +1,6 @@
 # Kanban Board Application
 
-A robust Kanban board application built with Next.js 14, TypeScript, Tailwind CSS, and SQLite.
+A robust Kanban board application built with Next.js 14, TypeScript, Tailwind CSS, and LocalStorage.
 
 ## Features
 
@@ -10,14 +10,14 @@ A robust Kanban board application built with Next.js 14, TypeScript, Tailwind CS
 - ✅ **Drag and Drop**: Organize tasks by dragging them between columns
 - ✅ **Column Customization**: Customize column names and colors
 - ✅ **Light/Dark Mode**: Toggle between light and dark themes
-- ✅ **Persistent Storage**: SQLite database for data persistence
+- ✅ **Persistent Storage**: LocalStorage for client-side data persistence
 
 ## Tech Stack
 
 - **Framework**: Next.js 14 (App Router)
 - **Language**: TypeScript 5.x
 - **Styling**: Tailwind CSS 3.x
-- **Database**: SQLite (better-sqlite3) with Drizzle ORM
+- **Storage**: LocalStorage (client-side persistence)
 - **Drag & Drop**: @dnd-kit
 - **Testing**: Jest, React Testing Library, Playwright
 
@@ -41,17 +41,7 @@ cd kanban
 npm install
 ```
 
-3. Set up environment variables:
-```bash
-# .env.local is already created with DATABASE_PATH=./data/kanban.db
-```
-
-4. Run database migrations (automatic on first run):
-```bash
-# Migrations run automatically on server start
-```
-
-5. Start the development server:
+3. Start the development server:
 ```bash
 npm run dev
 ```
@@ -68,9 +58,6 @@ npm run dev
 - `npm run test:watch` - Run tests in watch mode
 - `npm run test:coverage` - Run tests with coverage report
 - `npm run test:e2e` - Run E2E tests with Playwright
-- `npm run db:generate` - Generate database migrations
-- `npm run db:migrate` - Run database migrations
-- `npm run db:studio` - Open Drizzle Studio
 
 ## Project Structure
 
@@ -99,27 +86,24 @@ kanban/
 │   ├── e2e/            # E2E tests
 │   ├── integration/    # Integration tests
 │   └── unit/           # Unit tests
-├── data/               # SQLite database files
 └── specs/              # Specification documents
 ```
 
-## Database
+## Storage
 
-The application uses SQLite for data persistence. The database file is stored in `./data/kanban.db` (development) and is automatically created on first run.
+The application uses **LocalStorage** for client-side data persistence. All data is stored in the browser's localStorage, making it perfect for Vercel deployments without requiring a database.
+
+### Data Structure
+
+- **boards**: Board information
+- **columns**: Column information (belongs to board)
+- **tasks**: Task information (belongs to column and board)
+- **subtasks**: Subtask information (belongs to task)
+- **theme**: User theme preference (light/dark)
 
 ### Vercel Deployment
 
-When deploying to Vercel, the database will automatically use `/tmp/kanban.db` (the only writable directory in serverless functions). Note that data in `/tmp` is ephemeral and will be lost between function invocations. For production use, consider using a persistent database solution like Vercel Postgres or an external SQLite service.
-
-To configure a custom database path in Vercel, set the `DATABASE_PATH` environment variable in your Vercel project settings.
-
-### Schema
-
-- **boards**: Stores board information
-- **columns**: Stores column information (belongs to board)
-- **tasks**: Stores task information (belongs to column and board)
-- **subtasks**: Stores subtask information (belongs to task)
-- **theme_preferences**: Stores user theme preference
+This application is fully compatible with Vercel serverless functions since it uses client-side localStorage. No database configuration is needed!
 
 ## Features Overview
 

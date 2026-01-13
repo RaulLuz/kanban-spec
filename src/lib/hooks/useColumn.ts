@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
+import { ColumnService } from '@/lib/services/ColumnService';
 import type { Column } from '@/types';
 
 export function useColumn(boardId: string | null) {
@@ -18,13 +19,8 @@ export function useColumn(boardId: string | null) {
       setLoading(true);
       setError(null);
 
-      const response = await fetch(`/api/boards/${boardId}/columns`);
-      if (!response.ok) {
-        throw new Error('Failed to load columns');
-      }
-
-      const data = await response.json();
-      setColumns(data.columns || []);
+      const cols = await ColumnService.getColumnsByBoard(boardId);
+      setColumns(cols);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to load columns';
       setError(errorMessage);
