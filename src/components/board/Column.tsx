@@ -17,7 +17,7 @@ interface ColumnProps {
  * Column component - displays a column with its tasks
  * Supports drag and drop for tasks within the column
  */
-export const Column = memo(function Column({ column, tasks, onTaskClick, onAddTask, onEdit }: ColumnProps) {
+function ColumnComponent({ column, tasks, onTaskClick, onAddTask, onEdit }: ColumnProps) {
   const taskCount = tasks.length;
   const taskIds = tasks.map((t) => t.id);
 
@@ -63,4 +63,6 @@ export const Column = memo(function Column({ column, tasks, onTaskClick, onAddTa
       </button>
     </div>
   );
-});
+}
+
+export const Column = memo(ColumnComponent);
