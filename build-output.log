@@ -1,0 +1,30 @@
+
+> kanban@0.1.0 build
+> next build
+
+  ▲ Next.js 14.2.35
+  - Environments: .env.local
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully
+   Linting and checking validity of types ...
+
+Failed to compile.
+
+./src/components/board/TaskCard.tsx
+19:10  Error: 'loading' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+
+./src/components/modals/EditTaskModal.tsx
+9:7  Error: 'useModalClose' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+
+./src/lib/db/index.ts
+4:21  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+38:35  Error: Require statement not part of import statement.  @typescript-eslint/no-var-requires
+39:13  Error: 'drizzle' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+39:25  Error: Require statement not part of import statement.  @typescript-eslint/no-var-requires
+40:18  Error: Require statement not part of import statement.  @typescript-eslint/no-var-requires
+41:16  Error: Require statement not part of import statement.  @typescript-eslint/no-var-requires
+56:25  Error: Require statement not part of import statement.  @typescript-eslint/no-var-requires
+86:26  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+
+info  - Need to disable some ESLint rules? Learn more here: https://nextjs.org/docs/basic-features/eslint#disabling-rules

@@ -1,12 +1,25 @@
-import Database from 'better-sqlite3';
+import BetterSqlite3Database from 'better-sqlite3';
 
 /**
  * Run database migrations
  * This is a simple migration runner - in production, use drizzle-kit migrations
  */
 export async function runMigrations() {
-  const dbPath = process.env.DATABASE_PATH || './data/kanban.db';
-  const sqlite = new Database(dbPath);
+  // Use /tmp in Vercel (only writable directory) or DATABASE_PATH env var
+  let dbPath = process.env.DATABASE_PATH;
+  
+  if (!dbPath) {
+    // Check if we're in Vercel
+    if (process.env.VERCEL || process.env.VERCEL_ENV) {
+      // Use /tmp in Vercel serverless functions
+      dbPath = '/tmp/kanban.db';
+    } else {
+      // Local development
+      dbPath = './data/kanban.db';
+    }
+  }
+
+  const sqlite = new BetterSqlite3Database(dbPath);
   
   try {
     // Create tables if they don't exist

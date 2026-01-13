@@ -16,7 +16,6 @@ interface TaskCardProps {
  */
 export const TaskCard = memo(function TaskCard({ task, onClick }: TaskCardProps) {
   const [subtasks, setSubtasks] = useState<Subtask[]>([]);
-  const [loading, setLoading] = useState(false);
 
   const {
     attributes,
@@ -42,7 +41,6 @@ export const TaskCard = memo(function TaskCard({ task, onClick }: TaskCardProps)
   useEffect(() => {
     const fetchSubtasks = async () => {
       try {
-        setLoading(true);
         const response = await fetch(`/api/tasks/${task.id}/subtasks`);
         if (response.ok) {
           const data = await response.json();
@@ -50,8 +48,6 @@ export const TaskCard = memo(function TaskCard({ task, onClick }: TaskCardProps)
         }
       } catch (error) {
         console.error('Failed to fetch subtasks:', error);
-      } finally {
-        setLoading(false);
       }
     };
 

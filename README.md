@@ -107,6 +107,12 @@ kanban/
 
 The application uses SQLite for data persistence. The database file is stored in `./data/kanban.db` (development) and is automatically created on first run.
 
+### Vercel Deployment
+
+When deploying to Vercel, the database will automatically use `/tmp/kanban.db` (the only writable directory in serverless functions). Note that data in `/tmp` is ephemeral and will be lost between function invocations. For production use, consider using a persistent database solution like Vercel Postgres or an external SQLite service.
+
+To configure a custom database path in Vercel, set the `DATABASE_PATH` environment variable in your Vercel project settings.
+
 ### Schema
 
 - **boards**: Stores board information

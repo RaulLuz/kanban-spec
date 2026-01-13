@@ -5,22 +5,6 @@ import { TaskForm } from '../task/TaskForm';
 import { useTask } from '@/lib/hooks/useTask';
 import type { Task, Column } from '@/types';
 
-// Close modal on Escape key
-const useModalClose = (isOpen: boolean, onClose: () => void) => {
-  useEffect(() => {
-    if (!isOpen) return;
-    
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
-    };
-    
-    window.addEventListener('keydown', handleEscape);
-    return () => window.removeEventListener('keydown', handleEscape);
-  }, [isOpen, onClose]);
-};
-
 interface EditTaskModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -40,6 +24,20 @@ export function EditTaskModal({
   const [task, setTask] = useState<Task | null>(null);
   const [selectedColumnId, setSelectedColumnId] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
+
+  // Close modal on Escape key
+  useEffect(() => {
+    if (!isOpen) return;
+    
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [isOpen, onClose]);
 
   useEffect(() => {
     if (isOpen && taskId) {

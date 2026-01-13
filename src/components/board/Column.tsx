@@ -3,14 +3,14 @@
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { TaskCard } from './TaskCard';
 import { memo } from 'react';
-import type { Column, Task } from '@/types';
+import type { Column as ColumnType, Task } from '@/types';
 
 interface ColumnProps {
-  column: Column;
+  column: ColumnType;
   tasks: Task[];
   onTaskClick: (task: Task) => void;
   onAddTask: (columnId: string) => void;
-  onEdit?: (column: Column) => void;
+  onEdit?: (column: ColumnType) => void;
 }
 
 /**
