@@ -1,0 +1,122 @@
+# Specify (Spec-Kit) Integration para Cursor
+
+Este arquivo integra os prompts e templates do Specify com a IA do Cursor, permitindo uso similar ao GitHub Copilot.
+
+## Comandos Disponíveis
+
+Quando o usuário usar qualquer um dos seguintes comandos, execute o prompt correspondente do Specify:
+
+### `/specify` ou `/speckit.specify`
+**Descrição**: Criar ou atualizar especificação de feature a partir de descrição em linguagem natural.
+**Prompt**: Use o conteúdo de `.github/agents/speckit.specify.agent.md`
+**Template**: `.specify/templates/spec-template.md`
+
+### `/plan` ou `/speckit.plan`
+**Descrição**: Executar workflow de planejamento de implementação usando o template de plano.
+**Prompt**: Use o conteúdo de `.github/agents/speckit.plan.agent.md`
+**Template**: `.specify/templates/plan-template.md`
+
+### `/tasks` ou `/speckit.tasks`
+**Descrição**: Gerar tasks.md acionável e ordenado por dependências baseado nos artefatos de design disponíveis.
+**Prompt**: Use o conteúdo de `.github/agents/speckit.tasks.agent.md`
+**Template**: `.specify/templates/tasks-template.md`
+
+### `/implement` ou `/speckit.implement`
+**Descrição**: Executar o plano de implementação processando e executando todas as tasks definidas em tasks.md.
+**Prompt**: Use o conteúdo de `.github/agents/speckit.implement.agent.md`
+
+### `/clarify` ou `/speckit.clarify`
+**Descrição**: Identificar áreas subespecificadas na especificação atual fazendo até 5 perguntas direcionadas.
+**Prompt**: Use o conteúdo de `.github/agents/speckit.clarify.agent.md`
+
+### `/analyze` ou `/speckit.analyze`
+**Descrição**: Realizar análise não-destrutiva de consistência e qualidade entre spec.md, plan.md e tasks.md.
+**Prompt**: Use o conteúdo de `.github/agents/speckit.analyze.agent.md`
+
+### `/checklist` ou `/speckit.checklist`
+**Descrição**: Criar checklist para o domínio especificado.
+**Prompt**: Use o conteúdo de `.github/agents/speckit.checklist.agent.md`
+**Template**: `.specify/templates/checklist-template.md`
+
+### `/constitution` ou `/speckit.constitution`
+**Descrição**: Gerenciar e atualizar a constitution do projeto.
+**Prompt**: Use o conteúdo de `.github/agents/speckit.constitution.agent.md`
+
+## Regras de Execução
+
+### Ao receber um comando Specify:
+
+1. **Identifique o comando**: Verifique se o usuário usou algum dos comandos acima (com ou sem `/`)
+
+2. **Carregue o prompt correspondente**: 
+   - Leia o arquivo `.github/agents/[nome-do-agente].agent.md`
+   - Use TODO o conteúdo como instruções para execução
+
+3. **Carregue templates quando necessário**:
+   - Se o comando requer template, leia `.specify/templates/[template-name].md`
+   - Use o template como estrutura base
+
+4. **Carregue contexto do projeto**:
+   - Sempre leia `.specify/memory/constitution.md` quando disponível
+   - Use scripts PowerShell em `.specify/scripts/powershell/` quando necessário
+   - Execute scripts com `-Json` para obter dados estruturados
+
+5. **Execute o workflow completo**:
+   - Siga TODAS as instruções do arquivo do agente
+   - Não pule etapas
+   - Use os templates fornecidos
+   - Execute scripts PowerShell quando necessário (use Git Bash ou PowerShell)
+
+6. **Respeite a Constitution**:
+   - A constitution (`.specify/memory/constitution.md`) é **NÃO-NEGOCIÁVEL**
+   - Todos os PRs/reviews devem verificar conformidade
+   - Conflitos com a constitution são automaticamente CRÍTICOS
+
+## Preenchimento Automático
+
+Quando o usuário estiver editando arquivos relacionados ao Specify:
+
+- **spec.md**: Use `.specify/templates/spec-template.md` como referência para estrutura
+- **plan.md**: Use `.specify/templates/plan-template.md` como referência
+- **tasks.md**: Use `.specify/templates/tasks-template.md` como referência
+- **checklists/**: Use `.specify/templates/checklist-template.md` como referência
+
+## Scripts PowerShell
+
+Ao executar scripts PowerShell:
+- Use caminhos absolutos quando possível
+- Para argumentos com aspas simples, use escape: `'I'\''m Groot'` ou aspas duplas: `"I'm Groot"`
+- Sempre use `-Json` quando disponível para obter saída estruturada
+- Execute do diretório raiz do repositório
+
+## Estrutura de Diretórios
+
+- `.specify/memory/`: Arquivos de memória do projeto (constitution, guidelines)
+- `.specify/templates/`: Templates para specs, plans, tasks, checklists
+- `.specify/scripts/powershell/`: Scripts auxiliares para workflows
+- `.github/agents/`: Definições dos agentes/prompts do Specify
+- `.github/prompts/`: Prompts adicionais (se houver)
+
+## Workflow Típico
+
+1. **Especificação**: `/specify "descrição da feature"` → cria spec.md
+2. **Clarificação**: `/clarify` → identifica áreas que precisam de esclarecimento
+3. **Planejamento**: `/plan` → cria plan.md com contexto técnico
+4. **Tasks**: `/tasks` → cria tasks.md com tarefas ordenadas
+5. **Análise**: `/analyze` → valida consistência entre documentos
+6. **Implementação**: `/implement` → executa as tasks
+
+## Notas Importantes
+
+- **Test-First (NON-NEGOTIABLE)**: TDD obrigatório quando especificado na constitution
+- **Library-First**: Features começam como bibliotecas standalone quando aplicável
+- **CLI Interface**: Bibliotecas expõem funcionalidade via CLI quando aplicável
+- **Integration Testing**: Foco em testes de contrato e comunicação entre serviços
+
+## Comandos de Contexto
+
+Quando o usuário pedir ajuda ou contexto sobre o Specify:
+- Liste todos os comandos disponíveis
+- Explique o workflow recomendado
+- Mostre exemplos de uso
+- Referencie a constitution quando relevante

@@ -31,7 +31,15 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+**Test-First Development**: ✓ All features will follow TDD workflow (tests written first)
+**Clean Code**: ✓ Code structure follows single responsibility principle
+**Domain-Driven Design**: ✓ Kanban domain concepts (Board, Column, Card, Task) are explicitly modeled
+**Automated Testing**: ✓ Testing pyramid strategy defined (unit > integration > E2E)
+**Code Quality**: ✓ Linting, type checking, and code review process defined
+**User Experience Consistency**: ✓ Design system and UX patterns defined for consistent interactions
+**Performance Optimization**: ✓ Performance targets and monitoring strategy defined
+
+**Violations**: [List any constitution violations that require justification]
 
 ## Project Structure
 
